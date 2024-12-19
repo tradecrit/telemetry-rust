@@ -19,3 +19,6 @@ tracing-opentelemetry = { version = "0.28.0", features = ["metrics", "tracing-lo
 
 pyroscope = "0.5.4"
 pyroscope_pprofrs = "0.2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
