@@ -1,5 +1,5 @@
 use opentelemetry::trace::TracerProvider as _;
-use opentelemetry::{global};
+use opentelemetry::{global, Key, Value};
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::logs::LoggerProvider;
@@ -8,22 +8,46 @@ use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace::{Tracer, TracerProvider};
 use opentelemetry_sdk::{runtime, trace, Resource};
 use std::time::Duration;
-use tracing::level_filters::LevelFilter;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{EnvFilter};
+use tracing_subscriber::EnvFilter;
+
+use opentelemetry_semantic_conventions::{
+    attribute::{ SERVICE_NAME},
+};
+use pyroscope::pyroscope::{PyroscopeAgentReady, PyroscopeAgentRunning};
+use pyroscope::PyroscopeAgent;
+use pyroscope_pprofrs::{pprof_backend, PprofConfig};
 
 #[derive(Debug, Clone)]
 pub struct TelemetryProvider {
     pub meter_provider: SdkMeterProvider,
-    logger_provider: LoggerProvider,
-    tracer_provider: TracerProvider,
+    pub logger_provider: LoggerProvider,
+    pub tracer_provider: TracerProvider,
 }
 
+#[derive(Debug, Clone)]
+pub struct TelemetryProviderConfig {
+    pub collector_url: String,
+    pub resource: Resource,
+    pub trace_endpoint: String,
+    pub log_endpoint: String,
+    pub metric_endpoint: String,
+    pub profile_endpoint: String,
+}
+
+
+
 impl TelemetryProvider {
-    pub fn new(collector_url: String, resource: Resource) -> Self {
-        let logger_provider: LoggerProvider = init_logs(collector_url.clone(), resource.clone());
+    pub fn new(config: TelemetryProviderConfig) -> Self {
+        let resource = config.resource;
+
+        let app_name: Value = resource
+            .get(Key::new(SERVICE_NAME))
+            .unwrap_or(Value::from("unknown"));
+
+        let logger_provider: LoggerProvider = init_logs(config.log_endpoint, resource.clone());
 
         let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider);
 
@@ -36,7 +60,7 @@ impl TelemetryProvider {
             .with_level(true)
             .with_ansi(true);
 
-        let tracer_provider: TracerProvider = init_tracer(collector_url.clone(), resource.clone());
+        let tracer_provider: TracerProvider = init_tracer(config.trace_endpoint, resource.clone());
         let tracer: Tracer = tracer_provider.tracer("app");
 
         let tracer_layer = OpenTelemetryLayer::new(tracer);
@@ -53,47 +77,34 @@ impl TelemetryProvider {
             .with(env_filter)
             .init();
 
+        let meter_provider: SdkMeterProvider =
+            init_meter_provider(config.metric_endpoint, resource.clone());
 
-        let meter_provider: SdkMeterProvider = init_meter_provider(collector_url.clone(), resource.clone());
+        let pyroscope_agent = init_profiling(config.profile_endpoint, app_name.clone().to_string());
+        let running_agent = pyroscope_agent.start().expect("Failed to start Pyroscope Agent");
 
         Self {
             meter_provider,
             logger_provider,
-            tracer_provider
+            tracer_provider,
         }
     }
 
     pub fn shutdown(&self) {
-        self.tracer_provider.shutdown().expect("TracerProvider should shutdown successfully");
-        self.logger_provider.shutdown().expect("LoggerProvider should shutdown successfully");
-        self.meter_provider.shutdown().expect("MeterProvider should shutdown successfully");
+        self.tracer_provider
+            .shutdown()
+            .expect("TracerProvider should shutdown successfully");
+        self.logger_provider
+            .shutdown()
+            .expect("LoggerProvider should shutdown successfully");
+        self.meter_provider
+            .shutdown()
+            .expect("MeterProvider should shutdown successfully");
     }
 }
 
-impl Drop for TelemetryProvider {
-    fn drop(&mut self) {
-        // Shutdown pipelines
-        self.tracer_provider.shutdown().expect("TracerProvider should shutdown successfully");
-        self.logger_provider.shutdown().expect("LoggerProvider should shutdown successfully");
-        self.meter_provider.shutdown().expect("MeterProvider should shutdown successfully");
-    }
-}
 
-// fn resource() -> Resource {
-//     Resource::from_schema_url(
-//         [
-//             KeyValue::new(SERVICE_NAME, env!("CARGO_PKG_NAME")),
-//             KeyValue::new(SERVICE_VERSION, env!("CARGO_PKG_VERSION")),
-//             KeyValue::new(DEPLOYMENT_ENVIRONMENT_NAME, "development"),
-//         ],
-//         SCHEMA_URL,
-//     )
-// }
-
-fn init_tracer(
-    collector_url: String,
-    resource: Resource
-) -> TracerProvider {
+fn init_tracer(collector_url: String, resource: Resource) -> TracerProvider {
     global::set_text_map_propagator(TraceContextPropagator::new());
 
     let exporter: opentelemetry_otlp::SpanExporter = opentelemetry_otlp::SpanExporter::builder()
@@ -119,10 +130,7 @@ fn init_tracer(
 }
 
 // Construct MeterProvider for MetricsLayer
-fn init_meter_provider(
-    collector_url: String,
-    resource: Resource
-) -> SdkMeterProvider {
+fn init_meter_provider(collector_url: String, resource: Resource) -> SdkMeterProvider {
     let exporter = opentelemetry_otlp::MetricExporter::builder()
         .with_tonic()
         .with_endpoint(collector_url)
@@ -140,7 +148,7 @@ fn init_meter_provider(
         opentelemetry_stdout::MetricExporter::default(),
         runtime::Tokio,
     )
-        .build();
+    .build();
 
     let meter_provider = MeterProviderBuilder::default()
         .with_resource(resource)
@@ -153,10 +161,7 @@ fn init_meter_provider(
     meter_provider
 }
 
-fn init_logs(
-    collector_url: String,
-    resource: Resource
-) -> LoggerProvider {
+fn init_logs(collector_url: String, resource: Resource) -> LoggerProvider {
     let exporter: opentelemetry_otlp::LogExporter = opentelemetry_otlp::LogExporter::builder()
         .with_tonic()
         .with_endpoint(collector_url)
@@ -169,4 +174,13 @@ fn init_logs(
         .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
         .with_resource(resource)
         .build()
+}
+
+fn init_profiling(collector_url: String, app_name: String) -> PyroscopeAgent<PyroscopeAgentReady> {
+    let agent = PyroscopeAgent::builder(collector_url, app_name)
+        .backend(pprof_backend(PprofConfig::new().sample_rate(100)))
+        .build()
+        .expect("Failed to create Pyroscope Agent");
+
+    agent
 }
