@@ -1,0 +1,32 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100  # Listen on port 3100 for all incoming traffic.
+
+limits_config:
+  volume_enabled: true
+
+common:
+  instance_addr: 127.0.0.1            # The address at which this Loki instance can be reached on the local hash ring.
+  path_prefix: /loki                  # Prefix for all HTTP endpoints.
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks  # The FS directory to store the Loki chunks in.
+      rules_directory: /loki/rules    # The FS directory to store the Loki rules in.
+  replication_factor: 1               # The replication factor (RF) determines how many ingesters will store each chunk.
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2020-10-24          # When the schema applies from.
+      store: tsdb               # Where the schema is stored, in this case using the TSDB store.
+      object_store: filesystem  # As configured in the common block above, the object store is the local filesystem.
+      schema: v13               # Specify the schema version to use, in this case the latest version (v13).
+      index:
+        prefix: index_          # Prefix for all index tables.
+        period: 24h             # The period for which each index table covers. In this case, 24 hours.
+
+ruler:
+  alertmanager_url: http://localhost:9093

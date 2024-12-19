@@ -1,0 +1,10 @@
+# pyroscope.yaml
+
+server:
+  log-level: debug
+  storage-path: /var/lib/pyroscope
+  api-bind-addr: :4040
+  web-bind-addr: :4040
+  cache-dimensions-size: 10000
+  cache-tags-size: 10000
+  retention: 10h
