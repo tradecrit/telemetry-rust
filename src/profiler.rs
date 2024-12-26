@@ -10,7 +10,7 @@ pub fn create(url: &str, service_name: &str) -> Result<PyroscopeAgent<PyroscopeA
 
     let backend_impl = pprof_backend(pprof_config);
 
-    let tags: Vec<(&str, &str)> = vec![("service.name", service_name), ("language", "rust")];
+    let tags: Vec<(&str, &str)> = vec![("service_name", service_name), ("language", "rust")];
 
     // Configure Pyroscope Agent
     let agent = PyroscopeAgent::builder(url, service_name)
