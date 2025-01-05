@@ -12,7 +12,6 @@ opentelemetry-stdout = {version = "0.27.0", features = ["trace", "metrics", "log
 opentelemetry-appender-tracing = "0.27.0"
 opentelemetry-semantic-conventions = {version = "0.27.0", features = ["default", "semconv_experimental"] }
 
-
 tracing = { version = "0.1.41", default-features = false, features = ["std", "attributes", "async-await", "tracing-attributes"] }
 tracing-subscriber = { version = "0.3.19", default-features = false, features = ["registry", "env-filter", "std", "chrono", "ansi"] }
 tracing-opentelemetry = { version = "0.28.0", features = ["metrics", "tracing-log", "async-trait"] }
