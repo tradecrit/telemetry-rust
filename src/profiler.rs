@@ -2,7 +2,7 @@ use pyroscope::pyroscope::PyroscopeAgentReady;
 use pyroscope::PyroscopeAgent;
 use pyroscope_pprofrs::{pprof_backend, PprofConfig};
 
-pub fn create(url: &str, service_name: &str) -> Result<PyroscopeAgent<PyroscopeAgentReady>, Box<dyn std::error::Error>> {
+pub fn init_profiler(url: &str, service_name: &str) -> Result<PyroscopeAgent<PyroscopeAgentReady>, Box<dyn std::error::Error>> {
     let pprof_config = PprofConfig::new()
         .sample_rate(100)
         .report_thread_id()
