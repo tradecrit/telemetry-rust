@@ -1,10 +1,8 @@
 use opentelemetry::global;
+use opentelemetry::metrics::{Counter, Histogram, MeterProvider};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::metrics::{MeterProviderBuilder, PeriodicReader, SdkMeterProvider};
 use opentelemetry_sdk::{runtime, Resource};
-use opentelemetry::metrics::{Counter, Histogram, Meter, MeterProvider};
-use std::sync::Arc;
-use tracing_subscriber::util::SubscriberInitExt;
 
 #[derive(Clone, Debug)]
 pub struct Metrics {

@@ -1,21 +1,21 @@
 pub mod profiler;
 mod metrics;
 
+use crate::metrics::init_meter_provider;
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::logs::LoggerProvider;
-use opentelemetry_sdk::metrics::{MeterProviderBuilder, PeriodicReader, SdkMeterProvider};
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace::{Tracer, TracerProvider};
-use opentelemetry_sdk::{runtime, trace, Resource};
+use opentelemetry_sdk::{trace, Resource};
 use std::time::Duration;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
-use crate::metrics::init_meter_provider;
 
 #[derive(Debug, Clone)]
 pub struct TelemetryProvider {
