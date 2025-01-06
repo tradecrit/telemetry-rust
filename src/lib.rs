@@ -1,4 +1,5 @@
 pub mod profiler;
+mod metrics;
 
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
@@ -14,12 +15,14 @@ use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
+use crate::metrics::init_meter_provider;
 
 #[derive(Debug, Clone)]
 pub struct TelemetryProvider {
     pub meter_provider: SdkMeterProvider,
     pub logger_provider: LoggerProvider,
     pub tracer_provider: TracerProvider,
+    pub metrics: metrics::Metrics,
 }
 
 #[derive(Debug, Clone)]
@@ -64,10 +67,13 @@ impl TelemetryProvider {
         let meter_provider: SdkMeterProvider =
             init_meter_provider(config.metric_url, resource.clone());
 
+        let metrics = metrics::Metrics::new("app", meter_provider.clone());
+
         Self {
             meter_provider,
             logger_provider,
             tracer_provider,
+            metrics,
         }
     }
 
@@ -110,36 +116,7 @@ fn init_tracer(collector_url: String, resource: Resource) -> TracerProvider {
 }
 
 // Construct MeterProvider for MetricsLayer
-fn init_meter_provider(collector_url: String, resource: Resource) -> SdkMeterProvider {
-    let exporter = opentelemetry_otlp::MetricExporter::builder()
-        .with_tonic()
-        .with_endpoint(collector_url)
-        .with_protocol(opentelemetry_otlp::Protocol::Grpc)
-        .with_temporality(opentelemetry_sdk::metrics::Temporality::default())
-        .build()
-        .expect("Failed to create OTLP metric exporter");
 
-    let reader = PeriodicReader::builder(exporter, runtime::Tokio)
-        .with_interval(std::time::Duration::from_secs(30))
-        .build();
-
-    // For debugging in development
-    let stdout_reader = PeriodicReader::builder(
-        opentelemetry_stdout::MetricExporter::default(),
-        runtime::Tokio,
-    )
-    .build();
-
-    let meter_provider = MeterProviderBuilder::default()
-        .with_resource(resource)
-        .with_reader(reader)
-        .with_reader(stdout_reader)
-        .build();
-
-    global::set_meter_provider(meter_provider.clone());
-
-    meter_provider
-}
 
 fn init_logs(collector_url: String, resource: Resource) -> LoggerProvider {
     let exporter: opentelemetry_otlp::LogExporter = opentelemetry_otlp::LogExporter::builder()
