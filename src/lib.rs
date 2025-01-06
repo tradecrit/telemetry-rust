@@ -2,7 +2,7 @@ pub mod profiler;
 mod metrics;
 
 use crate::metrics::init_meter_provider;
-use opentelemetry::global;
+use opentelemetry::{global, Key};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::WithExportConfig;
@@ -18,12 +18,19 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Clone)]
+pub struct TelemetryProviderAttributes {
+    pub app_name: String,
+    pub app_version: String,
+    pub environment: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct TelemetryProvider {
     pub meter_provider: SdkMeterProvider,
     pub logger_provider: LoggerProvider,
     pub tracer_provider: TracerProvider,
     pub metrics: metrics::Metrics,
-    pub resource: Resource
+    pub attributes: TelemetryProviderAttributes
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +44,16 @@ pub struct TelemetryProviderConfig {
 impl TelemetryProvider {
     pub fn new(config: TelemetryProviderConfig) -> Self {
         let resource = config.resource;
+
+        let parsed_app_name = resource.get(Key::new("service.name")).expect("service.name opentelemetry resource must be set").to_string();
+        let parsed_app_version = resource.get(Key::new("service.version")).expect("service.version opentelemetry resource must be set").to_string();
+        let parsed_environment = resource.get(Key::new("service.environment")).expect("service.environment opentelemetry resource must be set").to_string();
+
+        let attributes = TelemetryProviderAttributes {
+            app_name: parsed_app_name,
+            app_version: parsed_app_version,
+            environment: parsed_environment
+        };
 
         let logger_provider: LoggerProvider = init_logs(config.log_url, resource.clone());
         let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider);
@@ -75,7 +92,7 @@ impl TelemetryProvider {
             logger_provider,
             tracer_provider,
             metrics,
-            resource,
+            attributes,
         }
     }
 
@@ -89,10 +106,6 @@ impl TelemetryProvider {
         self.logger_provider
             .shutdown()
             .expect("LoggerProvider should shutdown successfully");
-    }
-
-    pub fn get_resources(&self) -> Resource {
-        self.resource.clone()
     }
 }
 
