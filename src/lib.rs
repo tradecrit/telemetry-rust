@@ -23,6 +23,7 @@ pub struct TelemetryProvider {
     pub logger_provider: LoggerProvider,
     pub tracer_provider: TracerProvider,
     pub metrics: metrics::Metrics,
+    pub resource: Resource
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +75,7 @@ impl TelemetryProvider {
             logger_provider,
             tracer_provider,
             metrics,
+            resource,
         }
     }
 
@@ -87,6 +89,10 @@ impl TelemetryProvider {
         self.logger_provider
             .shutdown()
             .expect("LoggerProvider should shutdown successfully");
+    }
+
+    pub fn get_resources(&self) -> Resource {
+        self.resource.clone()
     }
 }
 
