@@ -1,0 +1,54 @@
+name: Continuous Integration Workflow
+
+on:
+  push:
+    branches: [ 'main' ]
+
+env:
+  GIT_HTTPS_USERNAME: dallinwright-tradecrit
+  GIT_HTTPS_PASSWORD: ${{ secrets.ACTIONS_TOKEN }}
+
+jobs:
+  build:
+    name: Validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+          token: '${{ secrets.ACTIONS_TOKEN }}'
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.ACTIONS_TOKEN }}
+
+      - name: Configure Git Credentials for Cargo
+        run: |
+          git config --global credential.helper store
+          echo "https://${GIT_HTTPS_USERNAME}:${GIT_HTTPS_PASSWORD}@github.com" > ~/.git-credentials
+          git config --global url."https://${GIT_HTTPS_USERNAME}:${GIT_HTTPS_PASSWORD}@github.com/".insteadOf "https://github.com/"
+
+      - name: Update Git Submodules
+        run: |
+          git submodule update --init --recursive --remote --merge
+
+      - name: Cargo Clippy
+        run: |
+          
+          cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run Unit & Integration Tests
+        run: |
+          cargo test --all-targets
