@@ -1,17 +1,18 @@
 pub mod profiler;
 mod metrics;
+mod logs;
+mod tracer;
 
+use crate::logs::init_log_provider;
 use crate::metrics::init_meter_provider;
-use opentelemetry::{global, Key};
-use opentelemetry::trace::TracerProvider as _;
+use crate::tracer::init_tracer_provider;
+use opentelemetry::trace::TracerProvider;
+use opentelemetry::{Key, Value};
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
-use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::logs::LoggerProvider;
+use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
-use opentelemetry_sdk::propagation::TraceContextPropagator;
-use opentelemetry_sdk::trace::{Tracer, TracerProvider};
-use opentelemetry_sdk::{trace, Resource};
-use std::time::Duration;
+use opentelemetry_sdk::trace::{SdkTracerProvider, Tracer};
+use opentelemetry_sdk::Resource;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -19,17 +20,17 @@ use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Clone)]
 pub struct TelemetryProviderAttributes {
-    pub app_name: String,
-    pub app_version: String,
-    pub environment: String,
+    pub app_name: Value,
+    pub app_version: Value,
+    pub environment: Value,
 }
 
 #[derive(Debug, Clone)]
 pub struct TelemetryProvider {
     pub meter_provider: SdkMeterProvider,
-    pub logger_provider: LoggerProvider,
-    pub tracer_provider: TracerProvider,
-    pub metrics: metrics::Metrics,
+    pub logger_provider: SdkLoggerProvider,
+    pub tracer_provider: SdkTracerProvider,
+    // pub metrics: metrics::Metrics,
     pub attributes: TelemetryProviderAttributes
 }
 
@@ -45,9 +46,9 @@ impl TelemetryProvider {
     pub fn new(config: TelemetryProviderConfig) -> Self {
         let resource = config.resource;
 
-        let parsed_app_name = resource.get(Key::new("service.name")).expect("service.name opentelemetry resource must be set").to_string();
-        let parsed_app_version = resource.get(Key::new("service.version")).expect("service.version opentelemetry resource must be set").to_string();
-        let parsed_environment = resource.get(Key::new("service.environment")).expect("service.environment opentelemetry resource must be set").to_string();
+        let parsed_app_name = resource.get(&Key::new("service.name")).expect("Failed to get service name");
+        let parsed_app_version = resource.get(&Key::new("service.version")).expect("Failed to get service version");
+        let parsed_environment = resource.get(&Key::new("service.environment")).expect("Failed to get service environment");
 
         let attributes = TelemetryProviderAttributes {
             app_name: parsed_app_name,
@@ -55,7 +56,7 @@ impl TelemetryProvider {
             environment: parsed_environment
         };
 
-        let logger_provider: LoggerProvider = init_logs(config.log_url, resource.clone());
+        let logger_provider = init_log_provider(config.log_url, resource.clone());
         let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider);
 
         let fmt_layer = tracing_subscriber::fmt::layer()
@@ -67,7 +68,7 @@ impl TelemetryProvider {
             .with_level(true)
             .with_ansi(true);
 
-        let tracer_provider: TracerProvider = init_tracer(config.trace_url, resource.clone());
+        let tracer_provider: SdkTracerProvider = init_tracer_provider(config.trace_url, resource.clone());
         let tracer: Tracer = tracer_provider.tracer("app");
         let tracer_layer = OpenTelemetryLayer::new(tracer);
 
@@ -82,16 +83,14 @@ impl TelemetryProvider {
             .with(env_filter)
             .init();
 
-        let meter_provider: SdkMeterProvider =
-            init_meter_provider(config.metric_url, resource.clone());
+        let meter_provider: SdkMeterProvider = init_meter_provider(config.metric_url, resource.clone());
 
-        let metrics = metrics::Metrics::new("app", meter_provider.clone());
+        // let metrics = metrics::Metrics::new("app", meter_provider.clone());
 
         Self {
             meter_provider,
             logger_provider,
             tracer_provider,
-            metrics,
             attributes,
         }
     }
@@ -109,72 +108,6 @@ impl TelemetryProvider {
     }
 }
 
-fn init_tracer(collector_url: String, resource: Resource) -> TracerProvider {
-    global::set_text_map_propagator(TraceContextPropagator::new());
 
-    let exporter: opentelemetry_otlp::SpanExporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_tonic()
-        .with_endpoint(collector_url)
-        .with_protocol(opentelemetry_otlp::Protocol::Grpc)
-        .with_timeout(Duration::from_secs(3))
-        .build()
-        .expect("Failed to create OTLP span exporter");
-
-    let provider = TracerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
-        .with_id_generator(trace::RandomIdGenerator::default())
-        .with_max_attributes_per_span(16)
-        .with_max_events_per_span(16)
-        .with_max_links_per_span(16)
-        .with_resource(resource)
-        .build();
-
-    global::set_tracer_provider(provider.clone());
-
-    provider
-}
 
 // Construct MeterProvider for MetricsLayer
-
-
-fn init_logs(collector_url: String, resource: Resource) -> LoggerProvider {
-    let exporter: opentelemetry_otlp::LogExporter = opentelemetry_otlp::LogExporter::builder()
-        .with_tonic()
-        .with_endpoint(collector_url)
-        .with_protocol(opentelemetry_otlp::Protocol::Grpc)
-        .with_timeout(std::time::Duration::from_secs(3))
-        .build()
-        .expect("Failed to create OTLP log exporter");
-
-    LoggerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
-        .with_resource(resource)
-        .build()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use opentelemetry::KeyValue;
-    use opentelemetry_semantic_conventions::resource::SERVICE_NAME;
-    use opentelemetry_semantic_conventions::SCHEMA_URL;
-
-    #[tokio::test]
-    async fn test_telemetry_provider() {
-        let resource: Resource =
-            Resource::from_schema_url([KeyValue::new(SERVICE_NAME, "test-service")], SCHEMA_URL);
-
-        let telemetry_provider_config: TelemetryProviderConfig = TelemetryProviderConfig {
-            resource: resource.clone(),
-            trace_url: "grpc://localhost:4317".to_string(),
-            log_url: "grpc://localhost:4300".to_string(),
-            metric_url: "grpc://localhost:9009".to_string(),
-        };
-
-        let telemetry_provider = TelemetryProvider::new(telemetry_provider_config);
-
-        tracing::info!("Test event");
-
-        telemetry_provider.shutdown();
-    }
-}
