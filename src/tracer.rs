@@ -1,20 +1,34 @@
 use std::time::Duration;
 use opentelemetry::global;
-use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_otlp::{Protocol, WithExportConfig};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::{trace, Resource};
 use opentelemetry_sdk::trace::SdkTracerProvider;
 
-pub fn init_tracer_provider(collector_url: String, resource: Resource) -> SdkTracerProvider {
+pub fn init_tracer_provider(collector_url: String, resource: Resource, protocol: Protocol) -> SdkTracerProvider {
     global::set_text_map_propagator(TraceContextPropagator::new());
 
-    let exporter: opentelemetry_otlp::SpanExporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_tonic()
-        .with_endpoint(collector_url)
-        .with_protocol(opentelemetry_otlp::Protocol::Grpc)
-        .with_timeout(Duration::from_secs(3))
-        .build()
-        .expect("Failed to create OTLP span exporter");
+    let exporter: opentelemetry_otlp::SpanExporter = match protocol {
+        Protocol::Grpc => {
+            opentelemetry_otlp::SpanExporter::builder()
+                .with_tonic()
+                .with_endpoint(collector_url)
+                .with_protocol(opentelemetry_otlp::Protocol::Grpc)
+                .with_timeout(Duration::from_secs(3))
+                .build()
+                .expect("Failed to create OTLP span exporter")
+        },
+        Protocol::HttpJson => {
+            opentelemetry_otlp::SpanExporter::builder()
+                .with_http()
+                .with_endpoint(collector_url)
+                .with_protocol(opentelemetry_otlp::Protocol::HttpJson)
+                .with_timeout(Duration::from_secs(3))
+                .build()
+                .expect("Failed to create OTLP span exporter")
+        },
+        _ => panic!("Unsupported protocol"),
+    };
 
     let provider = SdkTracerProvider::builder()
         .with_batch_exporter(exporter)

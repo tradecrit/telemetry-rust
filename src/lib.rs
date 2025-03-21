@@ -10,6 +10,7 @@ use crate::tracer::init_tracer_provider;
 use opentelemetry::trace::TracerProvider;
 use opentelemetry::{Key, KeyValue, Value};
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
+use opentelemetry_otlp::Protocol;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::{SdkTracerProvider, Tracer};
@@ -40,12 +41,12 @@ pub struct TelemetryProviderConfig {
     pub trace_url: String,
     pub log_url: String,
     pub metric_url: String,
+    pub protocol: Protocol
 }
 
 impl TelemetryProvider {
     pub fn new(config: TelemetryProviderConfig) -> Self {
         let resource = config.resource;
-
         let parsed_app_name = resource.get(&Key::new("service.name")).expect("Failed to get service name");
         let parsed_app_version = resource.get(&Key::new("service.version")).expect("Failed to get service version");
         let parsed_environment = resource.get(&Key::new("service.environment")).expect("Failed to get service environment");
@@ -56,9 +57,18 @@ impl TelemetryProvider {
             environment: parsed_environment
         };
 
-        let logger_provider = init_log_provider(config.log_url, resource.clone());
-
+        let logger_provider = init_log_provider(config.log_url, resource.clone(), config.protocol);
         let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider);
+
+        let tracer_provider: SdkTracerProvider = init_tracer_provider(config.trace_url, resource.clone(), config.protocol);
+        let tracer: Tracer = tracer_provider.tracer("app");
+        let tracer_layer = OpenTelemetryLayer::new(tracer);
+
+        let env_filter = EnvFilter::try_from_default_env()
+            .or_else(|_| EnvFilter::try_new("info"))
+            .expect("Failed to create EnvFilter");
+
+        let meter_provider: SdkMeterProvider = init_meter_provider(config.metric_url, resource.clone(), config.protocol);
 
         let fmt_layer = tracing_subscriber::fmt::layer()
             .with_target(true)
@@ -69,22 +79,12 @@ impl TelemetryProvider {
             .with_level(true)
             .with_ansi(true);
 
-        let tracer_provider: SdkTracerProvider = init_tracer_provider(config.trace_url, resource.clone());
-        let tracer: Tracer = tracer_provider.tracer("app");
-        let tracer_layer = OpenTelemetryLayer::new(tracer);
-
-        let env_filter = EnvFilter::try_from_default_env()
-            .or_else(|_| EnvFilter::try_new("info"))
-            .expect("Failed to create EnvFilter");
-
         tracing_subscriber::registry()
             .with(logger_layer)
             .with(tracer_layer)
             .with(fmt_layer)
             .with(env_filter)
             .init();
-
-        let meter_provider: SdkMeterProvider = init_meter_provider(config.metric_url, resource.clone());
 
         Self {
             meter_provider,
@@ -120,11 +120,30 @@ impl Default for TelemetryProvider {
             .with_attribute(KeyValue::new("service.environment", environment.clone()))
             .build();
 
-        let telemetry_config = TelemetryProviderConfig {
-            resource: app_details_resource,
-            trace_url: env::var("TRACE_URL").unwrap_or("grpc://localhost:4317".to_string()),
-            log_url: env::var("LOG_URL").unwrap_or("grpc://localhost:4317".to_string()),
-            metric_url: env::var("METRICS_URL").unwrap_or("grpc://localhost:4317".to_string()),
+        let telemetry_protocol = env::var("TELEMETRY_PROTOCOL").unwrap_or("grpc".to_string());
+
+        let telemetry_config = match telemetry_protocol.as_str() {
+            "grpc" => {
+                TelemetryProviderConfig {
+                    resource: app_details_resource,
+                    trace_url: env::var("TRACE_URL").unwrap_or("http://127.0.0.1:4317".to_string()),
+                    log_url: env::var("LOG_URL").unwrap_or("http://127.0.0.1:4317".to_string()),
+                    metric_url: env::var("METRICS_URL").unwrap_or("http://127.0.0.1:4317".to_string()),
+                    protocol: Protocol::Grpc
+                }
+            },
+            "http" => {
+                TelemetryProviderConfig {
+                    resource: app_details_resource,
+                    trace_url: env::var("TRACE_URL").unwrap_or("http://localhost:4318/v1/traces".to_string()),
+                    log_url: env::var("LOG_URL").unwrap_or("http://localhost:4318/v1/logs".to_string()),
+                    metric_url: env::var("METRICS_URL").unwrap_or("http://localhost:4318/v1/metrics".to_string()),
+                    protocol: Protocol::HttpJson
+                }
+            },
+            _ => {
+                panic!("Invalid telemetry protocol");
+            }
         };
 
         let telemetry_provider: TelemetryProvider = TelemetryProvider::new(telemetry_config);

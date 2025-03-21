@@ -1,16 +1,21 @@
 #[cfg(test)]
 mod tests {
-    use tracing::{span, Level};
+    use dotenvy::dotenv;
     use telemetry_rust::TelemetryProvider;
+    
+    #[tracing::instrument]
+    fn test_instrument() {
+        tracing::info!("hello world");
+    }
 
     #[tokio::test]
     async fn test_provider() {
-        // let telemetry_provider: TelemetryProvider = TelemetryProvider::default();
-        //
-        // tracing::info!("Hello world!");
-        //
-        // let my_span = span!(Level::INFO, "my_span", answer = 42);
-        //
-        // telemetry_provider.shutdown();
+        dotenv().ok();
+
+        let telemetry_provider: TelemetryProvider = TelemetryProvider::default();
+
+        test_instrument();
+
+        telemetry_provider.shutdown();
     }
 }
