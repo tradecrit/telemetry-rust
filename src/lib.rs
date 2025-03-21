@@ -105,9 +105,9 @@ impl Default for TelemetryProvider {
         let job = env!("CARGO_PKG_NAME");
 
         let default_attributes = vec![
-            KeyValue::new("name", app_name.clone()),
-            KeyValue::new("version", app_version),
-            KeyValue::new("environment", environment.clone()),
+            KeyValue::new("service.name", app_name.clone()),
+            KeyValue::new("service.version", app_version),
+            KeyValue::new("service.environment", environment),
             KeyValue::new("job", job)
         ];
 

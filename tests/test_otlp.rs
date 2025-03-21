@@ -5,19 +5,8 @@ mod tests {
     use telemetry_rust::TelemetryProvider;
 
     #[tracing::instrument]
-    fn test_instrument() {
-        tracing::info!("hello world");
-    }
-
-    #[tokio::test]
-    async fn test_provider() {
-        dotenv().ok();
-
-        let telemetry_provider: TelemetryProvider = TelemetryProvider::default();
-
-        test_instrument();
-
-        telemetry_provider.shutdown();
+    fn test_instrument(msg: &str) {
+        tracing::info!("Tracing: {}", msg);
     }
 
     #[tokio::test]
@@ -32,6 +21,8 @@ mod tests {
             let random_1_to_10 = rand::random::<u64>() % 10 + 1;
 
             telemetry_provider.metrics.increment_request_counter(random_1_to_10);
+
+            test_instrument(&format!("Request count: {}", random_1_to_10));
 
             count += 1;
 
