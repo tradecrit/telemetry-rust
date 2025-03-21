@@ -3,11 +3,12 @@ mod metrics;
 mod logs;
 mod tracer;
 
+use std::env;
 use crate::logs::init_log_provider;
 use crate::metrics::init_meter_provider;
 use crate::tracer::init_tracer_provider;
 use opentelemetry::trace::TracerProvider;
-use opentelemetry::{Key, Value};
+use opentelemetry::{Key, KeyValue, Value};
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
@@ -30,7 +31,6 @@ pub struct TelemetryProvider {
     pub meter_provider: SdkMeterProvider,
     pub logger_provider: SdkLoggerProvider,
     pub tracer_provider: SdkTracerProvider,
-    // pub metrics: metrics::Metrics,
     pub attributes: TelemetryProviderAttributes
 }
 
@@ -57,6 +57,7 @@ impl TelemetryProvider {
         };
 
         let logger_provider = init_log_provider(config.log_url, resource.clone());
+
         let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider);
 
         let fmt_layer = tracing_subscriber::fmt::layer()
@@ -85,8 +86,6 @@ impl TelemetryProvider {
 
         let meter_provider: SdkMeterProvider = init_meter_provider(config.metric_url, resource.clone());
 
-        // let metrics = metrics::Metrics::new("app", meter_provider.clone());
-
         Self {
             meter_provider,
             logger_provider,
@@ -109,5 +108,27 @@ impl TelemetryProvider {
 }
 
 
+impl Default for TelemetryProvider {
+    fn default() -> Self {
+        let app_name = env::var("APP_NAME").unwrap_or("application".to_string());
+        let environment = env::var("ENVIRONMENT").unwrap_or("development".to_string());
+        let app_version = env!("CARGO_PKG_VERSION");
 
-// Construct MeterProvider for MetricsLayer
+        let app_details_resource: Resource = Resource::builder()
+            .with_attribute(KeyValue::new("service.name", app_name.clone()))
+            .with_attribute(KeyValue::new("service.version", app_version))
+            .with_attribute(KeyValue::new("service.environment", environment.clone()))
+            .build();
+
+        let telemetry_config = TelemetryProviderConfig {
+            resource: app_details_resource,
+            trace_url: env::var("TRACE_URL").unwrap_or("grpc://localhost:4317".to_string()),
+            log_url: env::var("LOG_URL").unwrap_or("grpc://localhost:4317".to_string()),
+            metric_url: env::var("METRICS_URL").unwrap_or("grpc://localhost:4317".to_string()),
+        };
+
+        let telemetry_provider: TelemetryProvider = TelemetryProvider::new(telemetry_config);
+
+        telemetry_provider
+    }
+}
