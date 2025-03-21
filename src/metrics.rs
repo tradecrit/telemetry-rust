@@ -12,18 +12,20 @@ pub struct Metrics {
 
 impl Metrics {
     pub fn new(attributes: Vec<KeyValue>) -> Self {
-        let global_meter = global::meter("global");
-        
-        let request_counter = global_meter.u64_counter("request.count").build();
+        let meter = global::meter("global");
+
+        let request_counter = meter.u64_counter("request.count").build();
 
         Metrics {
             attributes,
-            request_counter
+            request_counter,
         }
     }
 
-    pub fn increment_request_counter(&self, count: u64) {
-        self.request_counter.add(count, &self.attributes);
+
+    pub fn increment_request_counter(&self) {
+        // Increment the counter each time a request is made
+        self.request_counter.add(1, &self.attributes);
     }
 }
 
@@ -51,7 +53,7 @@ pub(crate) fn init_meter_provider(collector_url: String, resource: Resource, pro
     };
 
     let reader: PeriodicReader = PeriodicReader::builder(exporter)
-        .with_interval(std::time::Duration::from_secs(30))
+        .with_interval(std::time::Duration::from_secs(5))
         .build();
 
     let stdout_reader: PeriodicReader =

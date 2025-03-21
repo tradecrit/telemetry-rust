@@ -20,15 +20,17 @@ mod tests {
         loop {
             let random_1_to_10 = rand::random::<u64>() % 10 + 1;
 
-            telemetry_provider.metrics.increment_request_counter(random_1_to_10);
+            telemetry_provider.metrics.increment_request_counter();
 
             test_instrument(&format!("Request count: {}", random_1_to_10));
 
             count += 1;
 
-            if count > 10 {
+            if count > 100 {
                 break;
             }
+
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
 
         telemetry_provider.shutdown();
