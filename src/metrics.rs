@@ -52,11 +52,11 @@ pub(crate) fn init_meter_provider(collector_url: String, resource: Resource, pro
         _ => panic!("Unsupported protocol"),
     };
 
-    let reader: PeriodicReader = PeriodicReader::builder(exporter)
+    let reader = PeriodicReader::builder(exporter)
         .with_interval(std::time::Duration::from_secs(5))
         .build();
 
-    let stdout_reader: PeriodicReader =
+    let stdout_reader =
         PeriodicReader::builder(opentelemetry_stdout::MetricExporter::default()).build();
 
     let meter_provider = MeterProviderBuilder::default()
