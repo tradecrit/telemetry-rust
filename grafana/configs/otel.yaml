@@ -15,7 +15,7 @@ exporters:
   otlphttp/traces:
     endpoint: http://tempo:4418
   otlphttp/metrics:
-    endpoint: http://mimir:9009/api/v1/otlp
+    endpoint: http://prometheus:9009/api/v1/otlp
   debug/traces:
     verbosity: detailed
   debug/logs:

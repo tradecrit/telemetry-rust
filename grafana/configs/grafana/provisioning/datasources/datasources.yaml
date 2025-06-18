@@ -29,17 +29,15 @@ datasources:
         spanEndTimeShift: "500ms"
         spanStartTimeShift: "-500ms"
 
-  - name: Mimir
+  - name: Prometheus
     type: prometheus
     access: proxy
-    uid: mimir
-    url: http://mimir:9009/prometheus
+    url: http://prometheus:9090
+    isDefault: true
     jsonData:
       exemplarTraceIdDestinations:
-        - datasourceUid: tempo
-          name: traceID
-      httpMethod: POST
-      timeInterval: "2s"
+        - name: trace_id
+          datasourceUid: tempo
 
   - name: Pyroscope
     type: phlare

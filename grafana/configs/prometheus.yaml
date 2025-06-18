@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  - job_name: 'alloy'
+    static_configs:
+      - targets: ['alloy:12345']
+
+remote_write:
+  - url: "http://alloy:12345/api/v1/receive"
