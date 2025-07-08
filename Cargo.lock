@@ -1229,7 +1229,6 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry-stdout",
  "opentelemetry_sdk",
- "rand",
  "tokio",
  "tracing",
  "tracing-opentelemetry",

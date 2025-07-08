@@ -1,31 +1,17 @@
 use std::time::Duration;
-use opentelemetry_otlp::{LogExporter, Protocol, WithExportConfig};
+use opentelemetry_otlp::{LogExporter, WithExportConfig};
 use opentelemetry_sdk::logs::{BatchConfig, BatchConfigBuilder, BatchLogProcessor, LoggerProviderBuilder, SdkLoggerProvider};
 use opentelemetry_sdk::Resource;
 
 
-pub(crate) fn init_log_provider(log_url: String, resource: Resource, protocol: Protocol) -> SdkLoggerProvider {
-    let exporter: LogExporter = match protocol {
-        Protocol::Grpc => {
-            opentelemetry_otlp::LogExporter::builder()
-                .with_tonic()
-                .with_endpoint(log_url)
-                .with_protocol(opentelemetry_otlp::Protocol::Grpc)
-                .with_timeout(Duration::from_secs(3))
-                .build()
-                .expect("Failed to create OTLP log exporter")
-        },
-        Protocol::HttpJson => {
-            opentelemetry_otlp::LogExporter::builder()
-                .with_http()
-                .with_endpoint(log_url)
-                .with_protocol(opentelemetry_otlp::Protocol::HttpJson)
-                .with_timeout(Duration::from_secs(3))
-                .build()
-                .expect("Failed to create OTLP log exporter")
-        },
-        _ => panic!("Unsupported protocol"),
-    };
+pub(crate) fn init_log_provider(log_url: String, resource: Resource) -> SdkLoggerProvider {
+    let exporter: LogExporter = opentelemetry_otlp::LogExporter::builder()
+        .with_tonic()
+        .with_endpoint(log_url)
+        .with_protocol(opentelemetry_otlp::Protocol::Grpc)
+        .with_timeout(Duration::from_secs(5))
+        .build()
+        .expect("Failed to create OTLP log exporter");
 
     let batch_config: BatchConfig = BatchConfigBuilder::default()
         .with_max_queue_size(4096)

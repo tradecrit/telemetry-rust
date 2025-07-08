@@ -47,18 +47,16 @@ impl TelemetryProvider {
             .or_else(|_| EnvFilter::try_new("info"))
             .expect("Failed to create EnvFilter");
 
-        let logger_provider: SdkLoggerProvider =
-            init_log_provider(config.log_url, resource.clone(), config.protocol);
+        let logger_provider: SdkLoggerProvider = init_log_provider(config.log_url, resource.clone());
 
         let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider);
 
-        let tracer_provider: SdkTracerProvider =
-            init_tracer_provider(config.trace_url, resource.clone(), config.protocol);
+        let tracer_provider: SdkTracerProvider = init_tracer_provider(config.trace_url, resource.clone());
         let tracer: Tracer = tracer_provider.tracer("app");
         let tracer_layer = OpenTelemetryLayer::new(tracer);
 
         let meter_provider: SdkMeterProvider =
-            init_meter_provider(config.metric_url, resource.clone(), config.protocol);
+            init_meter_provider(config.metric_url, resource.clone());
 
         let fmt_layer = tracing_subscriber::fmt::layer()
             .with_target(true)
