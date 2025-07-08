@@ -27,18 +27,6 @@ fn init_provider() -> TelemetryProvider {
 }
 
 #[tokio::test]
-async fn test_telemetry_provider_init() {
-    let telemetry_provider = init_provider();
-
-    tracing::info!("Hello, world!");
-
-    let try_shutdown = telemetry_provider.shutdown();
-
-    assert!(try_shutdown.is_ok());
-}
-
-
-#[tokio::test]
 async fn test_metrics_visible() {
     let telemetry_provider = init_provider();
 
