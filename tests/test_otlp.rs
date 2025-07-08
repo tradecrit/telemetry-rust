@@ -1,38 +1,34 @@
-#[cfg(test)]
-mod tests {
-    use dotenvy::dotenv;
+use std::time::Duration;
+use opentelemetry::KeyValue;
+use telemetry_rust::{TelemetryProvider, TelemetryProviderConfig};
 
-    use telemetry_rust::TelemetryProvider;
+#[tokio::test]
+async fn test_otlp() {
+    dotenvy::dotenv().ok();
 
-    #[tracing::instrument]
-    fn test_instrument(msg: &str) {
-        tracing::info!("Tracing: {}", msg);
-    }
+    let telemetry_url = std::env::var("TELEMETRY_URL")
+        .expect("TELEMETRY_URL must be set")
+        .trim_matches(|c| c == '"' || c == '\'')
+        .to_string();
 
-    #[tokio::test]
-    async fn test_tonic_metrics() {
-        dotenv().ok();
+    let default_attributes = vec![
+        KeyValue::new("service.name", "market_maker"),
+    ];
 
-        let telemetry_provider: TelemetryProvider = TelemetryProvider::default();
+    let telemetry_config = TelemetryProviderConfig {
+        trace_url: telemetry_url.clone(),
+        log_url: telemetry_url.clone(),
+        metric_url: telemetry_url.clone(),
+        protocol: opentelemetry_otlp::Protocol::Grpc,
+    };
 
-        let mut count = 0;
+    let telemetry_provider: TelemetryProvider = TelemetryProvider::new(telemetry_config, default_attributes);
 
-        loop {
-            let random_1_to_10 = rand::random::<u64>() % 10 + 1;
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
-            telemetry_provider.metrics.increment_request_counter();
+    tracing::info!("Hello, world!");
 
-            test_instrument(&format!("Request count: {}", random_1_to_10));
+    let try_shutdown = telemetry_provider.shutdown();
 
-            count += 1;
-
-            if count > 100 {
-                break;
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        }
-
-        telemetry_provider.shutdown();
-    }
+    assert!(try_shutdown.is_ok());
 }

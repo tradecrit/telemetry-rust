@@ -39,7 +39,5 @@ pub fn init_tracer_provider(collector_url: String, resource: Resource, protocol:
         .with_resource(resource)
         .build();
 
-    global::set_tracer_provider(provider.clone());
-
     provider
 }
