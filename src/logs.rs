@@ -3,7 +3,6 @@ use opentelemetry_otlp::{LogExporter, WithExportConfig};
 use opentelemetry_sdk::logs::{BatchConfig, BatchConfigBuilder, BatchLogProcessor, LoggerProviderBuilder, SdkLoggerProvider};
 use opentelemetry_sdk::Resource;
 
-
 pub(crate) fn init_log_provider(log_url: String, resource: Resource) -> SdkLoggerProvider {
     let exporter: LogExporter = opentelemetry_otlp::LogExporter::builder()
         .with_tonic()
