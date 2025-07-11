@@ -2,14 +2,15 @@ mod logs;
 pub mod metrics;
 pub mod profiler;
 mod tracer;
+mod microsecond_layer;
 
-use std::env;
-
+use std::{env, fmt};
+use chrono::Utc;
 use crate::logs::init_log_provider;
 use crate::metrics::init_meter_provider;
 use crate::tracer::init_tracer_provider;
 
-use opentelemetry::trace::TracerProvider;
+use opentelemetry::trace::{TracerProvider};
 use opentelemetry::KeyValue;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::Protocol;
@@ -21,12 +22,13 @@ use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer};
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::FormatTime;
 
 pub struct TelemetryProvider {
     pub meter_provider: SdkMeterProvider,
     pub logger_provider: SdkLoggerProvider,
     pub tracer_provider: SdkTracerProvider,
-    // running_profiler:  PyroscopeAgent<PyroscopeAgentRunning>
 }
 
 #[derive(Debug, Clone)]
@@ -37,9 +39,31 @@ pub struct TelemetryProviderConfig {
     pub protocol: Protocol,
 }
 
+pub fn current_micros() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_micros()
+}
+
+pub struct MicrosTime;
+
+impl FormatTime for MicrosTime {
+    fn format_time(&self, w: &mut Writer<'_>) -> fmt::Result {
+        let now = Utc::now();
+        // Format: 12:34:56.123456
+        write!(w, "{}", now.format("%H:%M:%S.%6f"))
+    }
+}
+
+
 fn get_env_filter() -> EnvFilter {
-    let trace_env_filter = EnvFilter::try_from_default_env()
-        .expect("Failed to parse env filter")
+    let env_level = env::var("RUST_LOG")
+        .expect("RUST_LOG must be set")
+        .trim_matches(|c| c == '"' || c == '\'')
+        .to_string();
+
+    let trace_env_filter = EnvFilter::from_env(env_level)
         .add_directive("opentelemetry=off".parse().unwrap())
         .add_directive("hyper=off".parse().unwrap())
         .add_directive("tonic=off".parse().unwrap())
@@ -48,14 +72,6 @@ fn get_env_filter() -> EnvFilter {
         .add_directive("reqwest=off".parse().unwrap());
 
     trace_env_filter
-}
-
-fn _get_service_name(attributes: &[KeyValue], default: &str) -> String {
-    attributes
-        .iter()
-        .find(|kv| kv.key.as_str() == "service.name")
-        .map(|kv| kv.value.to_string())
-        .unwrap_or_else(|| default.to_string())
 }
 
 impl TelemetryProvider {
@@ -80,7 +96,7 @@ impl TelemetryProvider {
             .with_thread_ids(true)
             .with_thread_names(true)
             .with_line_number(true)
-            .with_timer(tracing_subscriber::fmt::time::ChronoUtc::rfc_3339())
+            .with_timer(MicrosTime)
             .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
             .with_level(true)
             .with_ansi(true);
@@ -92,33 +108,20 @@ impl TelemetryProvider {
             .with(get_env_filter())
             .init();
 
-        // let profiler_url = env::var("PROFILER_URL").unwrap_or("http://localhost:4040".to_string());
-        // let service_name = get_service_name(&attributes, "application");
-        // let profiler: PyroscopeAgent<PyroscopeAgentReady> = init_profiler(profiler_url, service_name);
-        // let running_profiler: PyroscopeAgent<PyroscopeAgentRunning> = profiler.start().expect("Failed to start profiler");
-
         Self {
             meter_provider,
             logger_provider,
             tracer_provider,
-            // running_profiler
         }
     }
 
     pub fn shutdown(self) -> Result<(), Box<dyn std::error::Error>> {
-        // if let Err(err) = self.running_profiler.stop() {
-        //     tracing::warn!("Failed to stop profiler: {}", err);
-        // }
-
         if let Err(err) = self.tracer_provider.shutdown() {
             tracing::warn!("Failed to shutdown tracer provider: {}", err);
         }
         if let Err(err) = self.meter_provider.shutdown() {
             tracing::warn!("Failed to shutdown meter provider: {}", err);
         }
-
-        // Do not attempt to shut down the logger, the tracing bridge does some
-        // broken stuff behind the scenes on it.
 
         Ok(())
     }

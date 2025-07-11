@@ -14,8 +14,9 @@ tracing-subscriber = { version = "0.3.19", default-features = false, features = 
 tracing-opentelemetry = { version = "0.31.0", features = ["metrics", "tracing-log", "async-trait"] }
 tokio =  {version = "1", features = ["full"]}
 
-pyroscope = "0.5.4"
-pyroscope_pprofrs = "0.2"
+chrono = { version = "0.4.41", features = ["serde"] }
+#pyroscope = "0.5.4"
+#pyroscope_pprofrs = "0.2"
 
 [dev-dependencies]
 dotenvy = "0.15.7"
