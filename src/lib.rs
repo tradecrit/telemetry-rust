@@ -1,16 +1,16 @@
 mod logs;
 pub mod metrics;
+mod microsecond_layer;
 pub mod profiler;
 mod tracer;
-mod microsecond_layer;
 
-use std::{env, fmt};
-use chrono::Utc;
 use crate::logs::init_log_provider;
 use crate::metrics::init_meter_provider;
 use crate::tracer::init_tracer_provider;
+use chrono::Utc;
+use std::{env, fmt};
 
-use opentelemetry::trace::{TracerProvider};
+use opentelemetry::trace::TracerProvider;
 use opentelemetry::KeyValue;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::Protocol;
@@ -19,11 +19,11 @@ use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::{SdkTracerProvider, Tracer};
 use opentelemetry_sdk::Resource;
 use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer};
-use tracing_subscriber::fmt::format::Writer;
-use tracing_subscriber::fmt::time::FormatTime;
 
 pub struct TelemetryProvider {
     pub meter_provider: SdkMeterProvider,
@@ -56,7 +56,6 @@ impl FormatTime for MicrosTime {
     }
 }
 
-
 fn get_env_filter() -> EnvFilter {
     let env_level = env::var("RUST_LOG")
         .expect("RUST_LOG must be set")
@@ -80,11 +79,13 @@ impl TelemetryProvider {
             .with_attributes(attributes.clone())
             .build();
 
-        let logger_provider: SdkLoggerProvider = init_log_provider(config.log_url, resource.clone());
-        let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider)
-            .with_filter(get_env_filter());
+        let logger_provider: SdkLoggerProvider =
+            init_log_provider(config.log_url, resource.clone());
+        let logger_layer =
+            OpenTelemetryTracingBridge::new(&logger_provider).with_filter(get_env_filter());
 
-        let tracer_provider: SdkTracerProvider = init_tracer_provider(config.trace_url, resource.clone());
+        let tracer_provider: SdkTracerProvider =
+            init_tracer_provider(config.trace_url, resource.clone());
         let tracer: Tracer = tracer_provider.tracer("app");
         let tracer_layer = OpenTelemetryLayer::new(tracer);
 
