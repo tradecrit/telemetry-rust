@@ -1,13 +1,14 @@
 mod logs;
 pub mod metrics;
+mod microsecond_layer;
 pub mod profiler;
 mod tracer;
-
-use std::env;
 
 use crate::logs::init_log_provider;
 use crate::metrics::init_meter_provider;
 use crate::tracer::init_tracer_provider;
+use chrono::Utc;
+use std::{env, fmt};
 
 use opentelemetry::trace::TracerProvider;
 use opentelemetry::KeyValue;
@@ -18,11 +19,13 @@ use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::{SdkTracerProvider, Tracer};
 use opentelemetry_sdk::Resource;
 use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
-#[derive(Debug, Clone)]
+
 pub struct TelemetryProvider {
     pub meter_provider: SdkMeterProvider,
     pub logger_provider: SdkLoggerProvider,
@@ -35,6 +38,40 @@ pub struct TelemetryProviderConfig {
     pub log_url: String,
     pub metric_url: String,
     pub protocol: Protocol,
+}
+
+pub fn current_micros() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_micros()
+}
+
+pub struct MicrosTime;
+
+impl FormatTime for MicrosTime {
+    fn format_time(&self, w: &mut Writer<'_>) -> fmt::Result {
+        let now = Utc::now();
+        // Format: 12:34:56.123456
+        write!(w, "{}", now.format("%H:%M:%S.%6f"))
+    }
+}
+
+fn get_env_filter() -> EnvFilter {
+    let env_level = env::var("RUST_LOG")
+        .expect("RUST_LOG must be set")
+        .trim_matches(|c| c == '"' || c == '\'')
+        .to_string();
+
+    let trace_env_filter = EnvFilter::from_env(env_level)
+        .add_directive("opentelemetry=off".parse().unwrap())
+        .add_directive("hyper=off".parse().unwrap())
+        .add_directive("tonic=off".parse().unwrap())
+        .add_directive("tower=off".parse().unwrap())
+        .add_directive("h2=off".parse().unwrap())
+        .add_directive("reqwest=off".parse().unwrap());
+
+    trace_env_filter
 }
 
 impl TelemetryProvider {
@@ -65,7 +102,7 @@ impl TelemetryProvider {
             .with_thread_ids(true)
             .with_thread_names(true)
             .with_line_number(true)
-            .with_timer(tracing_subscriber::fmt::time::ChronoUtc::rfc_3339())
+            .with_timer(MicrosTime)
             .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
             .with_level(true)
             .with_ansi(true);
@@ -74,7 +111,7 @@ impl TelemetryProvider {
             .with(logger_layer)
             .with(tracer_layer)
             .with(fmt_layer)
-            .with(env_filter)
+            .with(get_env_filter())
             .init();
 
         Self {
@@ -84,15 +121,13 @@ impl TelemetryProvider {
         }
     }
 
-    pub fn shutdown(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn shutdown(self) -> Result<(), Box<dyn std::error::Error>> {
         if let Err(err) = self.tracer_provider.shutdown() {
             tracing::warn!("Failed to shutdown tracer provider: {}", err);
         }
         if let Err(err) = self.meter_provider.shutdown() {
             tracing::warn!("Failed to shutdown meter provider: {}", err);
         }
-        // Do not attempt to shut down the logger, the tracing bridge does some
-        // broken stuff behind the scenes on it.
 
         Ok(())
     }
