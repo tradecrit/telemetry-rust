@@ -20,7 +20,7 @@ use opentelemetry_sdk::Resource;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{EnvFilter};
+use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Clone)]
 pub struct TelemetryProvider {
@@ -47,11 +47,13 @@ impl TelemetryProvider {
             .or_else(|_| EnvFilter::try_new("info"))
             .expect("Failed to create EnvFilter");
 
-        let logger_provider: SdkLoggerProvider = init_log_provider(config.log_url, resource.clone());
+        let logger_provider: SdkLoggerProvider =
+            init_log_provider(config.log_url, resource.clone());
 
         let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider);
 
-        let tracer_provider: SdkTracerProvider = init_tracer_provider(config.trace_url, resource.clone());
+        let tracer_provider: SdkTracerProvider =
+            init_tracer_provider(config.trace_url, resource.clone());
         let tracer: Tracer = tracer_provider.tracer("app");
         let tracer_layer = OpenTelemetryLayer::new(tracer);
 
