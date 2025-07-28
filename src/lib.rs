@@ -20,7 +20,7 @@ use opentelemetry_sdk::Resource;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{EnvFilter};
+use tracing_subscriber::{EnvFilter, Layer};
 
 #[derive(Debug, Clone)]
 pub struct TelemetryProvider {
@@ -49,7 +49,14 @@ impl TelemetryProvider {
 
         let logger_provider: SdkLoggerProvider = init_log_provider(config.log_url, resource.clone());
 
-        let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider);
+        let filter_otel = EnvFilter::new("info")
+            .add_directive("hyper=off".parse().unwrap())
+            .add_directive("tonic=off".parse().unwrap())
+            .add_directive("h2=off".parse().unwrap())
+            .add_directive("reqwest=off".parse().unwrap());
+
+        let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider)
+            .with_filter(filter_otel);
 
         let tracer_provider: SdkTracerProvider = init_tracer_provider(config.trace_url, resource.clone());
         let tracer: Tracer = tracer_provider.tracer("app");
