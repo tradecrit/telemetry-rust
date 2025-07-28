@@ -53,6 +53,7 @@ impl TelemetryProvider {
             .add_directive("hyper=off".parse().unwrap())
             .add_directive("tonic=off".parse().unwrap())
             .add_directive("h2=off".parse().unwrap())
+            .add_directive("opentelemetry_sdk=off".parse().unwrap())
             .add_directive("reqwest=off".parse().unwrap());
 
         let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider)
