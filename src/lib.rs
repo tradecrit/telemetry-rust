@@ -50,6 +50,8 @@ impl TelemetryProvider {
             .add_directive("tonic=off".parse().unwrap())
             .add_directive("h2=off".parse().unwrap())
             .add_directive("opentelemetry_sdk=off".parse().unwrap())
+            .add_directive("opentelemetry-otlp=off".parse().unwrap())
+            .add_directive("tower=off".parse().unwrap())
             .add_directive("reqwest=off".parse().unwrap());
 
         let logger_provider: SdkLoggerProvider = init_log_provider(config.log_url, resource.clone());
