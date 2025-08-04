@@ -20,7 +20,7 @@ use opentelemetry_sdk::Resource;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter};
 
 #[derive(Debug, Clone)]
 pub struct TelemetryProvider {
@@ -45,19 +45,16 @@ impl TelemetryProvider {
 
         let env_filter = EnvFilter::try_from_default_env()
             .or_else(|_| EnvFilter::try_new("info"))
-            .expect("Failed to create EnvFilter");
-
-        let logger_provider: SdkLoggerProvider = init_log_provider(config.log_url, resource.clone());
-
-        let filter_otel = EnvFilter::new("info")
+            .expect("Failed to create EnvFilter")
             .add_directive("hyper=off".parse().unwrap())
             .add_directive("tonic=off".parse().unwrap())
             .add_directive("h2=off".parse().unwrap())
             .add_directive("opentelemetry_sdk=off".parse().unwrap())
             .add_directive("reqwest=off".parse().unwrap());
 
-        let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider)
-            .with_filter(filter_otel);
+        let logger_provider: SdkLoggerProvider = init_log_provider(config.log_url, resource.clone());
+
+        let logger_layer = OpenTelemetryTracingBridge::new(&logger_provider);
 
         let tracer_provider: SdkTracerProvider = init_tracer_provider(config.trace_url, resource.clone());
         let tracer: Tracer = tracer_provider.tracer("app");
